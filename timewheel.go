@@ -9,7 +9,7 @@ import (
 )
 
 type TimeWheel struct {
-	taskSet        []*task
+	taskSet        []*Task
 	mu             sync.Mutex
 	tickCount      int32
 	timeOfOnceTick time.Duration // 最小刻度 1ms
@@ -18,8 +18,8 @@ type TimeWheel struct {
 	cancel         context.CancelFunc
 }
 
-type task struct {
-	next    *task
+type Task struct {
+	next    *Task
 	f       func()
 	timeOut time.Duration
 	circle  bool
@@ -30,7 +30,7 @@ type task struct {
 func NewTimeWheel(tickCount int32, timeOfOnceTick time.Duration) *TimeWheel {
 	ctx, cancel := context.WithCancel(context.Background())
 	tw := &TimeWheel{
-		taskSet:        make([]*task, tickCount),
+		taskSet:        make([]*Task, tickCount),
 		tickCount:      tickCount,
 		timeOfOnceTick: timeOfOnceTick,
 		curTickIndex:   0,
@@ -47,7 +47,7 @@ func (tw *TimeWheel) Start() {
 func (tw *TimeWheel) run() {
 	timer := time.NewTicker(tw.timeOfOnceTick)
 	defer timer.Stop()
-	var head *task
+	var head *Task
 	for {
 		select {
 		case <-tw.ctx.Done():
@@ -88,8 +88,8 @@ func (tw *TimeWheel) Stop() {
 }
 
 // AddTaskAfter timeOut毫秒
-func (tw *TimeWheel) AddTaskAfter(timeOut time.Duration, circle bool, f func()) *task {
-	t := &task{
+func (tw *TimeWheel) AddTaskAfter(timeOut time.Duration, circle bool, f func()) *Task {
+	t := &Task{
 		f:       f,
 		timeOut: timeOut,
 		circle:  circle,
@@ -99,19 +99,17 @@ func (tw *TimeWheel) AddTaskAfter(timeOut time.Duration, circle bool, f func()) 
 	return t
 }
 
-func (tw *TimeWheel) insert(t *task, insertTickIndex int) {
+func (tw *TimeWheel) insert(t *Task, insertTickIndex int) {
 	tw.mu.Lock()
 	defer tw.mu.Unlock()
 	if tw.taskSet[insertTickIndex] == nil {
-		//fmt.Println("insert first", insertTickIndex)
 		tw.taskSet[insertTickIndex] = t
 	} else {
-		//fmt.Println("insert after", insertTickIndex)
 		t.next = tw.taskSet[insertTickIndex]
 		tw.taskSet[insertTickIndex] = t
 	}
 }
 
-func (tw *TimeWheel) Remove(t *task) {
+func (tw *TimeWheel) Remove(t *Task) {
 	t.deleted = true
 }
