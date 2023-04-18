@@ -16,6 +16,7 @@ type TimeWheel struct {
 	curTickIndex   int32
 	ctx            context.Context
 	cancel         context.CancelFunc
+	started        bool
 }
 
 type Task struct {
@@ -36,12 +37,18 @@ func NewTimeWheel(tickCount int32, timeOfOnceTick time.Duration) *TimeWheel {
 		curTickIndex:   0,
 		ctx:            ctx,
 		cancel:         cancel,
+		started:        false,
 	}
 	return tw
 }
 
 func (tw *TimeWheel) Start() {
-	go tw.run()
+	tw.mu.Lock()
+	defer tw.mu.Unlock()
+	if !tw.started {
+		tw.started = true
+		go tw.run()
+	}
 }
 
 func (tw *TimeWheel) run() {
