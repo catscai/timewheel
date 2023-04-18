@@ -118,5 +118,7 @@ func (tw *TimeWheel) insert(t *Task, insertTickIndex int) {
 }
 
 func (tw *TimeWheel) Remove(t *Task) {
+	tw.mu.Lock()
+	defer tw.mu.Unlock()
 	t.deleted = true
 }
