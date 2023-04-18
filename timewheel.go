@@ -92,6 +92,10 @@ func (tw *TimeWheel) calTickIndex(timeOut time.Duration) int {
 
 func (tw *TimeWheel) Stop() {
 	tw.cancel()
+
+	tw.mu.Lock()
+	defer tw.mu.Unlock()
+	tw.started = false
 }
 
 // AddTaskAfter timeOut毫秒
