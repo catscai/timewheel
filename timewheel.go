@@ -74,6 +74,8 @@ func (tw *TimeWheel) run() {
 			go func() {
 				cur.f()
 				if cur.circle { // 重新插入集合，需要在当前任务执行之后插入
+					tw.mu.Lock()
+					defer tw.mu.Unlock()
 					tw.insert(cur, tw.calTickIndex(cur.timeOut))
 				}
 			}()
@@ -106,13 +108,13 @@ func (tw *TimeWheel) AddTaskAfter(timeOut time.Duration, circle bool, f func()) 
 		circle:  circle,
 		deleted: false,
 	}
+	tw.mu.Lock()
+	defer tw.mu.Unlock()
 	tw.insert(t, tw.calTickIndex(timeOut))
 	return t
 }
 
 func (tw *TimeWheel) insert(t *Task, insertTickIndex int) {
-	tw.mu.Lock()
-	defer tw.mu.Unlock()
 	if tw.taskSet[insertTickIndex] == nil {
 		tw.taskSet[insertTickIndex] = t
 	} else {
