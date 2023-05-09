@@ -17,6 +17,7 @@ type TimeWheel struct {
 	ctx            context.Context
 	cancel         context.CancelFunc
 	started        bool
+	sync           bool
 }
 
 type Task struct {
@@ -33,6 +34,18 @@ func NewTimeWheel(tickCount int32, timeOfOnceTick time.Duration) *TimeWheel {
 		tickCount:      tickCount,
 		timeOfOnceTick: timeOfOnceTick,
 		started:        false,
+		sync:           false,
+	}
+	return tw
+}
+
+// NewTimeWheelSync 处理任务时 同步处理，不再创建新的协程
+func NewTimeWheelSync(tickCount int32, timeOfOnceTick time.Duration) *TimeWheel {
+	tw := &TimeWheel{
+		tickCount:      tickCount,
+		timeOfOnceTick: timeOfOnceTick,
+		started:        false,
+		sync:           true,
 	}
 	return tw
 }
@@ -70,10 +83,22 @@ func (tw *TimeWheel) run() {
 		curTickIndex := atomic.LoadInt32(&tw.curTickIndex)
 		head = tw.taskSet[curTickIndex]
 		tw.taskSet[curTickIndex] = nil
+		atomic.StoreInt32(&tw.curTickIndex, (curTickIndex+1)%tw.tickCount)
+		tw.mu.Unlock()
+
 		for head != nil {
 			cur := head
 			head = head.next
 			if cur.deleted {
+				continue
+			}
+			if tw.sync {
+				cur.f()
+				if cur.circle { // 重新插入集合，需要在当前任务执行之后插入
+					tw.mu.Lock()
+					tw.insert(cur, tw.calTickIndex(cur.timeOut))
+					tw.mu.Unlock()
+				}
 				continue
 			}
 			go func() {
@@ -85,8 +110,7 @@ func (tw *TimeWheel) run() {
 				}
 			}()
 		}
-		atomic.StoreInt32(&tw.curTickIndex, (curTickIndex+1)%tw.tickCount)
-		tw.mu.Unlock()
+
 	}
 }
 
