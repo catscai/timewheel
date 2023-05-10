@@ -85,10 +85,10 @@ func (tw *TimeWheel) run() {
 		tw.taskSet[curTickIndex] = nil
 		atomic.StoreInt32(&tw.curTickIndex, (curTickIndex+1)%tw.tickCount)
 		tw.mu.Unlock()
-
 		for head != nil {
 			cur := head
 			head = head.next
+			cur.next = nil
 			if cur.deleted {
 				continue
 			}
@@ -96,7 +96,7 @@ func (tw *TimeWheel) run() {
 				cur.f()
 				if cur.circle { // 重新插入集合，需要在当前任务执行之后插入
 					tw.mu.Lock()
-					tw.insert(cur, tw.calTickIndex(cur.timeOut))
+					tw.insert(cur, tw.calTickIndex(curTickIndex, cur.timeOut))
 					tw.mu.Unlock()
 				}
 				continue
@@ -106,16 +106,14 @@ func (tw *TimeWheel) run() {
 				if cur.circle { // 重新插入集合，需要在当前任务执行之后插入
 					tw.mu.Lock()
 					defer tw.mu.Unlock()
-					tw.insert(cur, tw.calTickIndex(cur.timeOut))
+					tw.insert(cur, tw.calTickIndex(atomic.LoadInt32(&tw.curTickIndex), cur.timeOut))
 				}
 			}()
 		}
-
 	}
 }
 
-func (tw *TimeWheel) calTickIndex(timeOut time.Duration) int {
-	curTick := atomic.LoadInt32(&tw.curTickIndex)
+func (tw *TimeWheel) calTickIndex(curTick int32, timeOut time.Duration) int {
 	spinTickNum := int32(math.Floor(float64(timeOut / tw.timeOfOnceTick)))
 	insertTickIndex := int((curTick + spinTickNum) % tw.tickCount)
 	return insertTickIndex
@@ -145,7 +143,8 @@ func (tw *TimeWheel) AddTaskAfter(timeOut time.Duration, circle bool, f func()) 
 	}
 	tw.mu.Lock()
 	defer tw.mu.Unlock()
-	tw.insert(t, tw.calTickIndex(timeOut))
+	curTick := atomic.LoadInt32(&tw.curTickIndex)
+	tw.insert(t, tw.calTickIndex(curTick, timeOut))
 	return t
 }
 
